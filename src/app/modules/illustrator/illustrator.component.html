@@ -1,1 +1,16 @@
-Illustrator
+<gojs-diagram
+  [initDiagram]='initDiagram'
+  [nodeDataArray]='nodeDataArray'
+  [linkDataArray]='nodeDataArray'
+  [modelData]='state.diagramModelData'
+  [skipsDiagramUpdate]='state.skipsDiagramUpdate'
+  (modelChange)='diagramModelChange($event)'
+  [divClassName]='diagramDivClassName'
+>
+</gojs-diagram>
+
+<gojs-palette
+  [initPalette]='initPalette'
+  [nodeDataArray]='state.paletteNodeData'
+  [divClassName]='paletteDivClassName'>
+</gojs-palette>
