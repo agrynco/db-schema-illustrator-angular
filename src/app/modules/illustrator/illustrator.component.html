@@ -1,16 +1,1 @@
-<gojs-diagram
-  [initDiagram]='initDiagram'
-  [nodeDataArray]='nodeDataArray'
-  [linkDataArray]='nodeDataArray'
-  [modelData]='state.diagramModelData'
-  [skipsDiagramUpdate]='state.skipsDiagramUpdate'
-  (modelChange)='diagramModelChange($event)'
-  [divClassName]='diagramDivClassName'
->
-</gojs-diagram>
-
-<gojs-palette
-  [initPalette]='initPalette'
-  [nodeDataArray]='state.paletteNodeData'
-  [divClassName]='paletteDivClassName'>
-</gojs-palette>
+<div #myDiagramDiv id="myDiagramDiv" style="width: 2000px; height:1200px; border:1px solid black"></div>
