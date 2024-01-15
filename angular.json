@@ -60,7 +60,7 @@
             "sslKey": "ssl/localhost.key",
             "sslCert": "ssl/localhost.crt",
             "ssl": true
-          }
+          },
           "configurations": {
             "production": {
               "buildTarget": "db-schema-illustrator-angular:build:production"

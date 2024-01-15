@@ -29,7 +29,6 @@ export class IllustratorComponent implements AfterViewInit {
   @ViewChild('myDiagramDiv', {static: true}) myDiagramDiv!: ElementRef;
   dbSchemas: DbSchemaInfo[] = [];
   selectedSchema: string = '';
-  private tablesInfo: TableInfo[] = [];
   private myDiagram: Diagram | null = null;
 
   constructor(private _dbObjectsInfoService: DbObjectsInfoService, private renderer: Renderer2) {
@@ -78,7 +77,7 @@ export class IllustratorComponent implements AfterViewInit {
           allowCopy: false,
           "undoManager.isEnabled": true,
           layout: $(go.ForceDirectedLayout,
-            {defaultSpringLength: 30, defaultElectricalCharge: 100, arrangementOrigin: new go.Point(0, 0)})
+            {defaultSpringLength: 30, defaultElectricalCharge: 100, isOngoing: true})
         });
 
     this.myDiagram.addDiagramListener("InitialLayoutCompleted", function (e) {
@@ -162,22 +161,6 @@ export class IllustratorComponent implements AfterViewInit {
               stretch: go.GraphObject.Horizontal,
               background: "#f4f1e8",
             },
-            $(go.TextBlock,
-              {
-                font: "bold 15px sans-serif",
-                text: "Attributes",
-                row: 0,
-                alignment: go.Spot.TopLeft,
-                margin: new go.Margin(8, 0, 0, 0),
-                stroke: 'red'
-              },
-              new go.Binding("stroke", "", n => "#000000")),
-            $("PanelExpanderButton", "NonInherited", // the name of the element whose visibility this button toggles
-              {
-                row: 0,
-                column: 1
-              },
-              new go.Binding("ButtonIcon.stroke", "", n => "#d6d6d6")),
             $(go.Panel, "Vertical",
               {
                 name: "NonInherited",
@@ -187,23 +170,6 @@ export class IllustratorComponent implements AfterViewInit {
                 row: 1
               },
               new go.Binding("itemArray", "items")),
-            $(go.TextBlock,
-              {
-                font: "bold 15px sans-serif",
-                text: "Inherited Attributes",
-                row: 2,
-                alignment: go.Spot.TopLeft,
-                margin: new go.Margin(8, 0, 0, 0),
-              },
-              new go.Binding("visible", "visibility", Boolean),
-              new go.Binding("stroke", "", n => "#d6d6d6")),
-            $("PanelExpanderButton", "Inherited", // the name of the element whose visibility this button toggles
-              {
-                row: 2,
-                column: 1,
-              },
-              new go.Binding("visible", "visibility", Boolean),
-              new go.Binding("ButtonIcon.stroke", "", n => "#d6d6d6")),
             $(go.Panel, "Vertical",
               {
                 name: "Inherited",
@@ -212,7 +178,8 @@ export class IllustratorComponent implements AfterViewInit {
                 itemTemplate: itemTempl,
                 row: 3
               },
-              new go.Binding("itemArray", "inheriteditems"))
+              new go.Binding("itemArray", "inheriteditems")
+            )
           )
         ) // end Table Panel
       );  // end Node
@@ -290,7 +257,8 @@ export class IllustratorComponent implements AfterViewInit {
       return {
         key: tableInfos.name,
         visibility: true,
-        items: tableInfos.columns.filter((columnInfo: ColumnInfo) => columnInfo.name.endsWith('ID'))
+        items: tableInfos.columns.filter((columnInfo: ColumnInfo) =>
+          columnInfo.name.endsWith('ID') || columnInfo.isPrimary === true)
           .map((columnInfo: ColumnInfo) => {
             return {
               name: columnInfo.name,
