@@ -13,9 +13,9 @@ export interface TableInfo {
 }
 
 export interface ForeignKeyInfo {
-  constraintNameField: string
-  foreignKeyColumnNameField : string;
-  foreignKeyTableNameField : string;
-  frimaryKeyColumnNameField : string;
-  frimaryKeyTableNameField : string;
+  constraintName: string
+  foreignKeyColumnName : string;
+  foreignKeyTableName : string;
+  primaryKeyColumnName : string;
+  primaryKeyTableName : string;
 }

@@ -1,11 +1,12 @@
 import {AfterViewInit, Component, ElementRef, OnInit, Renderer2, ViewChild, ViewEncapsulation} from "@angular/core";
 import {GojsAngularModule} from "gojs-angular";
 import * as go from 'gojs';
+import {Diagram} from 'gojs';
 import {DbObjectsInfoService} from "./dbObjectsInfo.service";
 import {DbSchemaInfo, ForeignKeyInfo, TableInfo} from "./dbObjectsInfo.service.models";
 import {FormsModule} from "@angular/forms";
 import {NgForOf} from "@angular/common";
-import {Diagram} from "gojs";
+import {forkJoin} from "rxjs";
 
 @Component({
   selector: "illustrator",
@@ -256,119 +257,58 @@ export class IllustratorComponent implements OnInit, AfterViewInit {
         )
       );
 
-    // create the model for the E-R diagram
-    const nodeDataArray = [
-      {
-        key: "My Entity", visibility: true,
-        items: [
-          {name: "EntityID", iskey: true, figure: "Decision", color: "purple"},
-          {name: "EntityName", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "EntityDescription", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "EntityIcon", iskey: false, figure: "TriangleUp", color: "red"}],
-      },
-      {
-        key: "Products", visibility: true,
-        items: [{name: "ProductID", iskey: true, figure: "Decision", color: "purple"},
-          {name: "ProductName", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "ItemDescription", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "WholesalePrice", iskey: false, figure: "Circle", color: "green",},
-          {name: "ProductPhoto", iskey: false, figure: "TriangleUp", color: "red"}],
-        inheriteditems: [{name: "SupplierID", iskey: false, figure: "Decision", color: "purple"},
-          {name: "CategoryID", iskey: false, figure: "Decision", color: "purple"}]
-      },
-      {
-        key: "Suppliers", visibility: false,
-        items: [{name: "SupplierID", iskey: true, figure: "Decision", color: "purple"},
-          {name: "CompanyName", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "ContactName", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "Address", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "ShippingDistance", iskey: false, figure: "Circle", color: "green",},
-          {name: "Logo", iskey: false, figure: "TriangleUp", color: "red"}],
-        inheriteditems: []
-      },
-      {
-        key: "Categories", visibility: true,
-        items: [{name: "CategoryID", iskey: true, figure: "Decision", color: "purple"},
-          {name: "CategoryName", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "Description", iskey: false, figure: "Hexagon", color: "blue"},
-          {name: "Icon", iskey: false, figure: "TriangleUp", color: "red"}],
-        //inheriteditems: [{name: "SupplierID", iskey: false, figure: "Decision", color: "purple"}]
-      },
-      {
-        key: "Order Details", visibility: true,
-        items: [{name: "OrderID", iskey: true, figure: "Decision", color: "purple"},
-          {name: "UnitPrice", iskey: false, figure: "Circle", color: "green",},
-          {name: "Quantity", iskey: false, figure: "Circle", color: "green",},
-          {name: "Discount", iskey: false, figure: "Circle", color: "green"}],
-        inheriteditems: [{name: "ProductID", iskey: true, figure: "Decision", color: "purple"}]
-      },
-    ];
-    const linkDataArray = [
-      {from: "Products", to: "Suppliers", text: "0..N", toText: "1"},
-      {from: "Products", to: "Categories", text: "0..N", toText: "1"},
-      {from: "Order Details", to: "Products", text: "0..N", toText: "1"},
-      {from: "Categories", to: "Suppliers", text: "0..N", toText: "1"}
-    ];
     this.myDiagram.model = new go.GraphLinksModel(
       {
         copiesArrays: true,
         copiesArrayObjects: true,
         modelData: {darkMode: false},
         nodeDataArray: [],
-        linkDataArray: linkDataArray
+        linkDataArray: []
       });
   }
 
   onSchemaChange($event: any) {
     this.selectedSchema = $event.target.value;
 
-    this._dbObjectsInfoService.getTables($event.target.value).subscribe((tablesInfo: TableInfo[]) => {
+    let tables = this._dbObjectsInfoService.getTables($event.target.value);
+    let foreignKeys = this._dbObjectsInfoService.getForeignKeys($event.target.value);
 
-      this.myDiagram!.startTransaction('clear Diagram');
-      this.myDiagram!.clear();
-      this.myDiagram!.model.nodeDataArray = tablesInfo.map((tableInfos: TableInfo) => {
-        return {
-          key: tableInfos.name,
-          visibility: true,
-          items: tableInfos.columns.map((columnInfo: any) => {
-            return {
-              name: columnInfo.name,
-              iskey: columnInfo.isPrimary,
-              figure: "Decision",
-              color: "purple"
-            };
-          }),
-          inheriteditems: []
-        };
-      });
-      this.myDiagram!.commitTransaction('clear Diagram');
+    forkJoin({tables, foreignKeys}).subscribe(results => {
+      let transformForeighKeysToLinks = this.transformForeighKeysToLinks(results.foreignKeys);
 
-      this.addLinksToDiagram($event.target.value);
+      var model = new go.GraphLinksModel(this.transformToGoJsEntities(results.tables),
+        transformForeighKeysToLinks);
+      this.myDiagram!.model = model;
     });
   }
 
-  addLinksToDiagram(dbSchema: string) {
-    this._dbObjectsInfoService.getForeignKeys(dbSchema).subscribe((foreignKeyInfos: ForeignKeyInfo[]) => {
-
-      let linkDataArray = foreignKeyInfos.map((foreignKeyInfo: ForeignKeyInfo) => {
-        return {
-          from: foreignKeyInfo.foreignKeyTableNameField,
-          to: foreignKeyInfo.frimaryKeyTableNameField,
-          text: "0..N",
-          toText: "1"
-        };
-      });
-
-      linkDataArray.forEach(item => {
-        let model = this.myDiagram!.model as go.GraphLinksModel;
-        this.myDiagram!.startTransaction();
-        model.addLinkData(item);
-        this.myDiagram!.commitTransaction("Added Link");
-      });
+  private transformToGoJsEntities(tablesInfo: TableInfo[]) {
+    return tablesInfo.map((tableInfos: TableInfo) => {
+      return {
+        key: tableInfos.name,
+        visibility: true,
+        items: tableInfos.columns.map((columnInfo: any) => {
+          return {
+            name: columnInfo.name,
+            iskey: columnInfo.isPrimary,
+            figure: "Decision",
+            color: "purple"
+          };
+        }),
+        inheriteditems: []
+      };
     });
   }
 
-  // getSchemaByName(name: string): DbSchemaInfo | undefined {
-  //   return this.dbSchemas.find(schema => schema.name === name);
-  // }
+  private transformForeighKeysToLinks(foreignKeyInfos: ForeignKeyInfo[]) {
+    return foreignKeyInfos.map((foreignKeyInfo: ForeignKeyInfo) => {
+      return {
+        from: foreignKeyInfo.foreignKeyTableName,
+        to: foreignKeyInfo.primaryKeyTableName,
+        text: "0..N",
+        toText: "1"
+      };
+    });
+  }
+
 }
