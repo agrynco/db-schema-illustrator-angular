@@ -1,6 +1,11 @@
-import {Component, ElementRef, OnInit, ViewChild, ViewEncapsulation} from "@angular/core";
+import {AfterViewInit, Component, ElementRef, OnInit, Renderer2, ViewChild, ViewEncapsulation} from "@angular/core";
 import {GojsAngularModule} from "gojs-angular";
 import * as go from 'gojs';
+import {DbObjectsInfoService} from "./dbObjectsInfo.service";
+import {DbSchemaInfo, ForeignKeyInfo, TableInfo} from "./dbObjectsInfo.service.models";
+import {FormsModule} from "@angular/forms";
+import {NgForOf} from "@angular/common";
+import {Diagram} from "gojs";
 
 @Component({
   selector: "illustrator",
@@ -8,12 +13,16 @@ import * as go from 'gojs';
   styleUrls: ["illustrator.component.scss"],
   standalone: true,
   imports: [
-    GojsAngularModule
+    GojsAngularModule,
+    FormsModule,
+    NgForOf
   ],
   encapsulation: ViewEncapsulation.None
 })
-export class IllustratorComponent implements OnInit {
+export class IllustratorComponent implements OnInit, AfterViewInit {
   @ViewChild('myDiagramDiv', {static: true}) myDiagramDiv!: ElementRef;
+  private tablesInfo: TableInfo[] = [];
+  private myDiagram: Diagram | null = null;
 
   colorSwitch(n: any) {
     const isDark = false;
@@ -24,19 +33,52 @@ export class IllustratorComponent implements OnInit {
     return "black";
   }
 
-  ngOnInit() {
+  dbSchemas: DbSchemaInfo[] = [];
+  selectedSchema: string = '';
 
+  //_nodeDataArray: any[] = [];
+
+  constructor(private _dbObjectsInfoService: DbObjectsInfoService, private renderer: Renderer2) {
+    this._dbObjectsInfoService.getDbSchemas().subscribe((dbSchemas: DbSchemaInfo[]) => {
+      this.dbSchemas = dbSchemas;
+    });
+  }
+
+  ngAfterViewInit(): void {
+    this.buildDiagram();
+  }
+
+  ngOnInit() {
+    //this.buildDiagram();
+  }
+
+  private buildDiagram() {
     // Since 2.2 you can also author concise templates with method chaining instead of GraphObject.make
     // For details, see https://gojs.net/latest/intro/buildingObjects.html
     const $ = go.GraphObject.make;  // for conciseness in defining templates
 
-    let myDiagram =
+    this.myDiagram =
       new go.Diagram("myDiagramDiv",   // must name or refer to the DIV HTML element
         {
           allowDelete: false,
           allowCopy: false,
-          "undoManager.isEnabled": true
+          "undoManager.isEnabled": true,
+          layout: $(go.ForceDirectedLayout,
+            {defaultSpringLength: 30, defaultElectricalCharge: 100, arrangementOrigin: new go.Point(0, 0)})
         });
+
+    this.myDiagram.addDiagramListener("InitialLayoutCompleted", function (e) {
+      let dia = e.diagram;
+      dia.startTransaction("Shift Origin");
+      let leftmost = Infinity;
+      dia.nodes.each(n => {
+        if (n.position.x < leftmost) leftmost = n.position.x;
+      });
+      dia.nodes.each(n => {
+        n.position.x -= leftmost;
+      });
+      dia.commitTransaction("Shift Origin");
+    });
 
     // the template for each attribute in a node's array of item data
     const itemTempl =
@@ -59,7 +101,7 @@ export class IllustratorComponent implements OnInit {
         ));
 
     // define the Node template, representing an entity
-    myDiagram.nodeTemplate =
+    this.myDiagram.nodeTemplate =
       $(go.Node, "Auto",  // the whole node panel
         {
           selectionAdorned: true,
@@ -157,7 +199,7 @@ export class IllustratorComponent implements OnInit {
       );  // end Node
 
     // define the Link template, representing a relationship
-    myDiagram.linkTemplate =
+    this.myDiagram.linkTemplate =
       $(go.Link,  // the whole link panel
         {
           selectionAdorned: true,
@@ -172,14 +214,14 @@ export class IllustratorComponent implements OnInit {
           click: (event: go.InputEvent, link: go.GraphObject) => {
             let clickedLink = link.part;
             if (clickedLink instanceof go.Link) {
-              myDiagram.startTransaction('add text');
+              this.myDiagram!.startTransaction('add text');
               // Clear the label for all Link Panels
-              myDiagram.links.each((link) => {
-                myDiagram.model.setDataProperty(link.data, 'text', '');
+              this.myDiagram!.links.each((link) => {
+                this.myDiagram!.model.setDataProperty(link.data, 'text', '');
               });
               // Set the label for the Link Panel that was clicked
-              myDiagram.model.setDataProperty(clickedLink.data, 'text', `Link goes from ${clickedLink.data.from} to ${clickedLink.data.to}`);
-              myDiagram.commitTransaction('add text');
+              this.myDiagram!.model.setDataProperty(clickedLink.data, 'text', `Link goes from ${clickedLink.data.from} to ${clickedLink.data.to}`);
+              this.myDiagram!.commitTransaction('add text');
             }
           }
         },
@@ -217,7 +259,7 @@ export class IllustratorComponent implements OnInit {
     // create the model for the E-R diagram
     const nodeDataArray = [
       {
-        key: "My Entity", visibility: true, location: new go.Point(0, 0),
+        key: "My Entity", visibility: true,
         items: [
           {name: "EntityID", iskey: true, figure: "Decision", color: "purple"},
           {name: "EntityName", iskey: false, figure: "Hexagon", color: "blue"},
@@ -225,7 +267,7 @@ export class IllustratorComponent implements OnInit {
           {name: "EntityIcon", iskey: false, figure: "TriangleUp", color: "red"}],
       },
       {
-        key: "Products", visibility: true, location: new go.Point(250, 250),
+        key: "Products", visibility: true,
         items: [{name: "ProductID", iskey: true, figure: "Decision", color: "purple"},
           {name: "ProductName", iskey: false, figure: "Hexagon", color: "blue"},
           {name: "ItemDescription", iskey: false, figure: "Hexagon", color: "blue"},
@@ -235,7 +277,7 @@ export class IllustratorComponent implements OnInit {
           {name: "CategoryID", iskey: false, figure: "Decision", color: "purple"}]
       },
       {
-        key: "Suppliers", visibility: false, location: new go.Point(600, 0),
+        key: "Suppliers", visibility: false,
         items: [{name: "SupplierID", iskey: true, figure: "Decision", color: "purple"},
           {name: "CompanyName", iskey: false, figure: "Hexagon", color: "blue"},
           {name: "ContactName", iskey: false, figure: "Hexagon", color: "blue"},
@@ -245,7 +287,7 @@ export class IllustratorComponent implements OnInit {
         inheriteditems: []
       },
       {
-        key: "Categories", visibility: true, location: new go.Point(250, 30),
+        key: "Categories", visibility: true,
         items: [{name: "CategoryID", iskey: true, figure: "Decision", color: "purple"},
           {name: "CategoryName", iskey: false, figure: "Hexagon", color: "blue"},
           {name: "Description", iskey: false, figure: "Hexagon", color: "blue"},
@@ -253,7 +295,7 @@ export class IllustratorComponent implements OnInit {
         //inheriteditems: [{name: "SupplierID", iskey: false, figure: "Decision", color: "purple"}]
       },
       {
-        key: "Order Details", visibility: true, location: new go.Point(600, 350),
+        key: "Order Details", visibility: true,
         items: [{name: "OrderID", iskey: true, figure: "Decision", color: "purple"},
           {name: "UnitPrice", iskey: false, figure: "Circle", color: "green",},
           {name: "Quantity", iskey: false, figure: "Circle", color: "green",},
@@ -267,13 +309,66 @@ export class IllustratorComponent implements OnInit {
       {from: "Order Details", to: "Products", text: "0..N", toText: "1"},
       {from: "Categories", to: "Suppliers", text: "0..N", toText: "1"}
     ];
-    myDiagram.model = new go.GraphLinksModel(
+    this.myDiagram.model = new go.GraphLinksModel(
       {
         copiesArrays: true,
         copiesArrayObjects: true,
         modelData: {darkMode: false},
-        nodeDataArray: nodeDataArray,
+        nodeDataArray: [],
         linkDataArray: linkDataArray
       });
   }
+
+  onSchemaChange($event: any) {
+    this.selectedSchema = $event.target.value;
+
+    this._dbObjectsInfoService.getTables($event.target.value).subscribe((tablesInfo: TableInfo[]) => {
+
+      this.myDiagram!.startTransaction('clear Diagram');
+      this.myDiagram!.clear();
+      this.myDiagram!.model.nodeDataArray = tablesInfo.map((tableInfos: TableInfo) => {
+        return {
+          key: tableInfos.name,
+          visibility: true,
+          items: tableInfos.columns.map((columnInfo: any) => {
+            return {
+              name: columnInfo.name,
+              iskey: columnInfo.isPrimary,
+              figure: "Decision",
+              color: "purple"
+            };
+          }),
+          inheriteditems: []
+        };
+      });
+      this.myDiagram!.commitTransaction('clear Diagram');
+
+      this.addLinksToDiagram($event.target.value);
+    });
+  }
+
+  addLinksToDiagram(dbSchema: string) {
+    this._dbObjectsInfoService.getForeignKeys(dbSchema).subscribe((foreignKeyInfos: ForeignKeyInfo[]) => {
+
+      let linkDataArray = foreignKeyInfos.map((foreignKeyInfo: ForeignKeyInfo) => {
+        return {
+          from: foreignKeyInfo.foreignKeyTableNameField,
+          to: foreignKeyInfo.frimaryKeyTableNameField,
+          text: "0..N",
+          toText: "1"
+        };
+      });
+
+      linkDataArray.forEach(item => {
+        let model = this.myDiagram!.model as go.GraphLinksModel;
+        this.myDiagram!.startTransaction();
+        model.addLinkData(item);
+        this.myDiagram!.commitTransaction("Added Link");
+      });
+    });
+  }
+
+  // getSchemaByName(name: string): DbSchemaInfo | undefined {
+  //   return this.dbSchemas.find(schema => schema.name === name);
+  // }
 }

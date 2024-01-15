@@ -1,1 +1,10 @@
-<div #myDiagramDiv id="myDiagramDiv" style="width: 2000px; height:1200px; border:1px solid black"></div>
+<div class="container">
+  <div>
+    <select [(ngModel)]="selectedSchema" (change)="onSchemaChange($event)">
+      <option *ngFor="let item of dbSchemas" [value]="item.name">
+        {{ item.name }}
+      </option>
+    </select>
+  </div>
+  <div id="myDiagramDiv" #myDiagramDiv></div>
+</div>
