@@ -20,7 +20,7 @@ import {forkJoin} from "rxjs";
   ],
   encapsulation: ViewEncapsulation.None
 })
-export class IllustratorComponent implements OnInit, AfterViewInit {
+export class IllustratorComponent implements AfterViewInit {
   @ViewChild('myDiagramDiv', {static: true}) myDiagramDiv!: ElementRef;
   private tablesInfo: TableInfo[] = [];
   private myDiagram: Diagram | null = null;
@@ -37,7 +37,6 @@ export class IllustratorComponent implements OnInit, AfterViewInit {
   dbSchemas: DbSchemaInfo[] = [];
   selectedSchema: string = '';
 
-  //_nodeDataArray: any[] = [];
 
   constructor(private _dbObjectsInfoService: DbObjectsInfoService, private renderer: Renderer2) {
     this._dbObjectsInfoService.getDbSchemas().subscribe((dbSchemas: DbSchemaInfo[]) => {
@@ -47,10 +46,6 @@ export class IllustratorComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.buildDiagram();
-  }
-
-  ngOnInit() {
-    //this.buildDiagram();
   }
 
   private buildDiagram() {
