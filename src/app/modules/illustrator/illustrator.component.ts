@@ -1,12 +1,17 @@
-import {AfterViewInit, Component, ElementRef, OnInit, Renderer2, ViewChild, ViewEncapsulation} from "@angular/core";
+import {AfterViewInit, Component, ElementRef, Renderer2, ViewChild, ViewEncapsulation} from "@angular/core";
 import {GojsAngularModule} from "gojs-angular";
 import * as go from 'gojs';
 import {Diagram} from 'gojs';
 import {DbObjectsInfoService} from "./dbObjectsInfo.service";
-import {DbSchemaInfo, ForeignKeyInfo, TableInfo} from "./dbObjectsInfo.service.models";
+import {ColumnInfo, DbSchemaInfo, ForeignKeyInfo, TableInfo} from "./dbObjectsInfo.service.models";
 import {FormsModule} from "@angular/forms";
 import {NgForOf} from "@angular/common";
 import {forkJoin} from "rxjs";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+import {TDocumentDefinitions} from "pdfmake/interfaces";
+
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 @Component({
   selector: "illustrator",
@@ -22,8 +27,16 @@ import {forkJoin} from "rxjs";
 })
 export class IllustratorComponent implements AfterViewInit {
   @ViewChild('myDiagramDiv', {static: true}) myDiagramDiv!: ElementRef;
+  dbSchemas: DbSchemaInfo[] = [];
+  selectedSchema: string = '';
   private tablesInfo: TableInfo[] = [];
   private myDiagram: Diagram | null = null;
+
+  constructor(private _dbObjectsInfoService: DbObjectsInfoService, private renderer: Renderer2) {
+    this._dbObjectsInfoService.getDbSchemas().subscribe((dbSchemas: DbSchemaInfo[]) => {
+      this.dbSchemas = dbSchemas;
+    });
+  }
 
   colorSwitch(n: any) {
     const isDark = false;
@@ -34,18 +47,23 @@ export class IllustratorComponent implements AfterViewInit {
     return "black";
   }
 
-  dbSchemas: DbSchemaInfo[] = [];
-  selectedSchema: string = '';
-
-
-  constructor(private _dbObjectsInfoService: DbObjectsInfoService, private renderer: Renderer2) {
-    this._dbObjectsInfoService.getDbSchemas().subscribe((dbSchemas: DbSchemaInfo[]) => {
-      this.dbSchemas = dbSchemas;
-    });
-  }
-
   ngAfterViewInit(): void {
     this.buildDiagram();
+  }
+
+  onSchemaChange($event: any) {
+    this.selectedSchema = $event.target.value;
+
+    let tables = this._dbObjectsInfoService.getTables($event.target.value);
+    let foreignKeys = this._dbObjectsInfoService.getForeignKeys($event.target.value);
+
+    forkJoin({tables, foreignKeys}).subscribe(results => {
+      let transformForeighKeysToLinks = this.transformForeighKeysToLinks(results.foreignKeys);
+
+      var model = new go.GraphLinksModel(this.transformToGoJsEntities(results.tables),
+        transformForeighKeysToLinks);
+      this.myDiagram!.model = model;
+    });
   }
 
   private buildDiagram() {
@@ -93,7 +111,7 @@ export class IllustratorComponent implements AfterViewInit {
         ),
         $(go.TextBlock,
           {font: " 14px sans-serif", stroke: "black"},
-          new go.Binding("text", "name"), new go.Binding("stroke", "", n => "#f5f5f5"),
+          new go.Binding("text", "name"), new go.Binding("stroke", "", n => "#000000"),
         ));
 
     // define the Node template, representing an entity
@@ -107,7 +125,7 @@ export class IllustratorComponent implements AfterViewInit {
           toSpot: go.Spot.LeftRightSides,
           isShadowed: true,
           shadowOffset: new go.Point(4, 4),
-          shadowColor: "#919cab"
+          shadowColor: "#919cab",
         },
         new go.Binding("location", "location").makeTwoWay(),
         // whenever the PanelExpanderButton changes the visible property of the "LIST" panel,
@@ -115,12 +133,12 @@ export class IllustratorComponent implements AfterViewInit {
         new go.Binding("desiredSize", "visible", v => new go.Size(NaN, NaN)).ofObject("LIST"),
         // define the node's outer shape, which will surround the Table
         $(go.Shape, "RoundedRectangle",
-          {stroke: "#e8f1ff", strokeWidth: 3},
-          new go.Binding("fill", "", n => "#4a4a4a")
+          {stroke: "#e8f1ff", strokeWidth: 2},
+          new go.Binding("fill", "", n => "#34497a")
         ),
         $(go.Panel, "Table",
           {
-            margin: 8,
+            margin: 1,
             stretch: go.GraphObject.Fill,
             width: 160
           },
@@ -139,7 +157,11 @@ export class IllustratorComponent implements AfterViewInit {
             {row: 0, alignment: go.Spot.TopRight},
             new go.Binding("ButtonIcon.stroke", "", n => "#d6d6d6")),
           $(go.Panel, "Table",
-            {name: "LIST", row: 1, stretch: go.GraphObject.Horizontal},
+            {
+              name: "LIST", row: 1,
+              stretch: go.GraphObject.Horizontal,
+              background: "#f4f1e8",
+            },
             $(go.TextBlock,
               {
                 font: "bold 15px sans-serif",
@@ -147,8 +169,9 @@ export class IllustratorComponent implements AfterViewInit {
                 row: 0,
                 alignment: go.Spot.TopLeft,
                 margin: new go.Margin(8, 0, 0, 0),
+                stroke: 'red'
               },
-              new go.Binding("stroke", "", n => "#d6d6d6")),
+              new go.Binding("stroke", "", n => "#000000")),
             $("PanelExpanderButton", "NonInherited", // the name of the element whose visibility this button toggles
               {
                 row: 0,
@@ -262,34 +285,20 @@ export class IllustratorComponent implements AfterViewInit {
       });
   }
 
-  onSchemaChange($event: any) {
-    this.selectedSchema = $event.target.value;
-
-    let tables = this._dbObjectsInfoService.getTables($event.target.value);
-    let foreignKeys = this._dbObjectsInfoService.getForeignKeys($event.target.value);
-
-    forkJoin({tables, foreignKeys}).subscribe(results => {
-      let transformForeighKeysToLinks = this.transformForeighKeysToLinks(results.foreignKeys);
-
-      var model = new go.GraphLinksModel(this.transformToGoJsEntities(results.tables),
-        transformForeighKeysToLinks);
-      this.myDiagram!.model = model;
-    });
-  }
-
   private transformToGoJsEntities(tablesInfo: TableInfo[]) {
     return tablesInfo.map((tableInfos: TableInfo) => {
       return {
         key: tableInfos.name,
         visibility: true,
-        items: tableInfos.columns.map((columnInfo: any) => {
-          return {
-            name: columnInfo.name,
-            iskey: columnInfo.isPrimary,
-            figure: "Decision",
-            color: "purple"
-          };
-        }),
+        items: tableInfos.columns.filter((columnInfo: ColumnInfo) => columnInfo.name.endsWith('ID'))
+          .map((columnInfo: ColumnInfo) => {
+            return {
+              name: columnInfo.name,
+              iskey: columnInfo.isPrimary,
+              figure: "Decision",
+              color: "purple"
+            };
+          }),
         inheriteditems: []
       };
     });
@@ -306,4 +315,34 @@ export class IllustratorComponent implements AfterViewInit {
     });
   }
 
+  private exportToPdf() {
+    // First, get the image data
+    const imgData = this.myDiagram!.makeImageData({scale: 1, background: 'white'});
+
+    if (typeof imgData === 'string') {
+      // It's a complete data url, use it as is
+      const docDefinition: TDocumentDefinitions = {
+        pageSize: 'A4',
+        pageOrientation: 'landscape',
+        content: [
+          {
+            image: imgData,
+            width: 500,
+            height: 300,
+            alignment: 'center'
+          }
+        ]
+      };
+
+      pdfMake.createPdf(docDefinition).download('Diagram.pdf');
+    } else {
+      console.log('Unexpected image data type');
+      // Handle HTMLImageElement or ImageData case here
+    }
+
+  }
+
+  saveToPdf() {
+    this.exportToPdf();
+  }
 }

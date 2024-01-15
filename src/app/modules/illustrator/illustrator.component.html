@@ -1,10 +1,15 @@
 <div class="container">
   <div>
-    <select [(ngModel)]="selectedSchema" (change)="onSchemaChange($event)">
-      <option *ngFor="let item of dbSchemas" [value]="item.name">
-        {{ item.name }}
-      </option>
-    </select>
+    <span>
+      <select (change)="onSchemaChange($event)" [(ngModel)]="selectedSchema">
+        <option *ngFor="let item of dbSchemas" [value]="item.name">
+          {{ item.name }}
+        </option>
+      </select>
+    </span>
+    <span>
+      <input type="button" value="Save" (click)="saveToPdf()" [disabled]="selectedSchema === ''" />
+    </span>
   </div>
-  <div id="myDiagramDiv" #myDiagramDiv></div>
+  <div #myDiagramDiv id="myDiagramDiv"></div>
 </div>

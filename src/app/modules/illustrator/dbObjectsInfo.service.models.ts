@@ -14,8 +14,8 @@ export interface TableInfo {
 
 export interface ForeignKeyInfo {
   constraintName: string
-  foreignKeyColumnName : string;
-  foreignKeyTableName : string;
-  primaryKeyColumnName : string;
-  primaryKeyTableName : string;
+  foreignKeyColumnName: string;
+  foreignKeyTableName: string;
+  primaryKeyColumnName: string;
+  primaryKeyTableName: string;
 }

@@ -8,7 +8,8 @@ import {Injectable} from "@angular/core";
   providedIn: 'root'
 })
 export class DbObjectsInfoService {
-  constructor(private _httpClient: HttpClient) {}
+  constructor(private _httpClient: HttpClient) {
+  }
 
   getDbSchemas(): Observable<DbSchemaInfo[]> {
     return this._httpClient.get<DbSchemaInfo[]>(`${environment.apiUrl}/soapproxy/schemas`);
